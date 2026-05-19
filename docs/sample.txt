@@ -1,0 +1,165 @@
+LangChain and Retrieval-Augmented Generation (RAG) Systems
+===========================================================
+
+Introduction to RAG
+-------------------
+Retrieval-Augmented Generation (RAG) is an AI architecture that enhances large language model (LLM)
+responses by grounding them in external, up-to-date knowledge. Instead of relying solely on the
+knowledge baked into a model during training, RAG systems first retrieve relevant documents from a
+knowledge base and then pass those documents as context to the LLM when generating a response.
+
+This approach addresses two major limitations of standalone LLMs:
+1. Knowledge cutoff — models only know about events up to their training date.
+2. Hallucination — models can confidently produce plausible-sounding but incorrect information.
+
+By anchoring answers in retrieved text, RAG dramatically reduces hallucinations and allows the system
+to work with proprietary or domain-specific data that was never in the training corpus.
+
+
+Core Components of a RAG Pipeline
+----------------------------------
+A production-grade RAG system consists of the following components:
+
+1. Document Ingestion
+   Raw documents (PDFs, text files, web pages, markdown) are loaded and split into smaller, overlapping
+   chunks. Chunking is necessary because embedding models and LLM context windows have token limits.
+   Typical chunk sizes range from 256 to 1024 tokens, with an overlap of 10–20% to preserve context
+   across chunk boundaries.
+
+2. Embedding
+   Each chunk is converted into a dense vector representation (embedding) using an embedding model
+   such as OpenAI text-embedding-3-small or sentence-transformers/all-MiniLM-L6-v2. These vectors
+   capture semantic meaning, enabling similarity-based search rather than keyword matching.
+
+3. Vector Store
+   The embeddings are persisted in a vector database such as ChromaDB, Pinecone, Weaviate, or pgvector.
+   ChromaDB is popular for local and prototyping use cases because it is fully open-source, runs
+   in-process, and persists data to disk automatically.
+
+4. Retrieval
+   At query time, the user's question is embedded using the same model. The vector store then returns
+   the top-k most semantically similar chunks using approximate nearest-neighbor (ANN) search (e.g.,
+   HNSW). A typical value of k is 3–6 chunks.
+
+5. Generation
+   The retrieved chunks are inserted into an LLM prompt as context. The model is instructed to answer
+   the user's question using only the provided context, and to cite the source documents. This grounds
+   the answer and makes it auditable.
+
+
+LangChain Overview
+------------------
+LangChain is an open-source framework (MIT licensed) for building applications powered by language
+models. It provides composable abstractions for every stage of a RAG pipeline:
+
+- Document Loaders: TextLoader, PyPDFLoader, UnstructuredMarkdownLoader, WebBaseLoader, and hundreds
+  more. Each loader returns a list of Document objects with page_content and metadata fields.
+
+- Text Splitters: RecursiveCharacterTextSplitter is the recommended default. It splits text
+  hierarchically (paragraph → sentence → word) to keep semantically coherent chunks. The chunk_size
+  and chunk_overlap parameters are specified in characters by default, but a tiktoken-based splitter
+  can count tokens directly.
+
+- Embedding Wrappers: LangChain wraps sentence-transformers, OpenAI, Cohere, and other providers
+  behind a unified HuggingFaceEmbeddings (or OpenAIEmbeddings, etc.) interface.
+
+- Vector Store Integrations: Chroma, Pinecone, FAISS, Qdrant, and many others implement the same
+  VectorStore interface, making it easy to swap backends without rewriting retrieval logic.
+
+- Retriever Abstraction: Any VectorStore can be converted to a Retriever via .as_retriever(). Advanced
+  retrievers include MultiQueryRetriever (generates multiple phrasings of the query), ContextualCompressionRetriever
+  (re-ranks and compresses retrieved docs), and SelfQueryRetriever (generates structured metadata filters).
+
+- LCEL (LangChain Expression Language): A declarative pipe-based syntax for chaining components.
+  A minimal RAG chain looks like: retriever | format_docs | prompt | llm | StrOutputParser().
+
+- Chat History & Memory: ConversationBufferMemory and RunnableWithMessageHistory allow multi-turn
+  conversations where the model remembers prior exchanges.
+
+
+Embedding Models: all-MiniLM-L6-v2
+-------------------------------------
+The sentence-transformers model all-MiniLM-L6-v2 is one of the most widely used open-source embedding
+models for RAG prototyping. Key properties:
+
+- Architecture: MiniLM (a distilled BERT variant) with 6 transformer layers.
+- Dimension: 384-dimensional output vectors.
+- Max sequence length: 256 word-pieces (approximately 190 words).
+- Speed: ~14,200 sentences/second on a modern CPU — very fast for local use.
+- License: Apache 2.0.
+- Semantic quality: Scores 58.8 on the STSB benchmark, competitive with models 10× its size.
+
+Because it runs on CPU without GPU acceleration, it is ideal for local development and resource-
+constrained environments. For production at scale, consider larger models like all-mpnet-base-v2
+(768 dimensions) or OpenAI text-embedding-3-small (1536 dimensions with API access).
+
+
+ChromaDB
+--------
+ChromaDB is an open-source, AI-native vector database written in Python and Rust. Key features:
+
+- Persistence: Pass a path argument to chromadb.PersistentClient(path="./chroma_db") and all
+  embeddings are automatically saved to disk via SQLite + parquet files. Data survives process restarts.
+- Collections: Data is organized into named collections. Each collection stores embeddings, documents,
+  and arbitrary metadata (e.g., source filename, page number).
+- HNSW Index: ChromaDB uses the HNSW algorithm for fast approximate nearest-neighbor search. HNSW
+  builds a hierarchical graph that allows sub-linear query time even with millions of vectors.
+- Filtering: Chroma supports metadata filtering with a MongoDB-like query syntax, enabling hybrid
+  search (e.g., retrieve only chunks from a specific document or date range).
+- LangChain Integration: langchain-chroma provides Chroma(persist_directory=..., embedding_function=...)
+  which wraps the ChromaDB client and exposes the standard VectorStore interface.
+
+
+Advanced RAG Techniques
+-----------------------
+Beyond the basic pipeline, production systems often incorporate:
+
+- Hybrid Search: Combines dense (embedding) retrieval with sparse (BM25/TF-IDF) retrieval. The two
+  result sets are merged using Reciprocal Rank Fusion (RRF) or a learned ranker. This improves recall
+  for exact-match queries (product codes, names, acronyms).
+
+- Reranking: A cross-encoder model (e.g., cross-encoder/ms-marco-MiniLM-L-6-v2) re-scores the top-k
+  candidates retrieved by the bi-encoder. Cross-encoders are more accurate but slower, so they are
+  applied only to a small candidate set (top-20 → rerank → top-4).
+
+- Query Expansion: MultiQueryRetriever asks the LLM to paraphrase the user's question into 3–5
+  variants. Each variant is embedded and used to retrieve chunks independently, broadening coverage.
+
+- Contextual Chunking: Anthropic introduced "contextual retrieval" (2024) where each chunk is
+  prepended with a short LLM-generated summary of the broader document context before embedding.
+  This significantly improves retrieval accuracy for long documents.
+
+- HyDE (Hypothetical Document Embeddings): The LLM generates a hypothetical answer to the question,
+  which is then embedded and used as the retrieval query. This bridges the vocabulary gap between
+  short questions and longer document chunks.
+
+- Agentic RAG: ReAct-style agents can decide whether to retrieve, which collection to query, and
+  whether to perform multiple retrieval rounds based on the relevance of initial results.
+
+
+Evaluation of RAG Systems
+--------------------------
+Common metrics for RAG evaluation:
+
+- Faithfulness: Does the answer contain only claims that are supported by the retrieved context?
+  Measured by RAGAS, TruLens, or LLM-as-judge prompts.
+- Answer Relevance: Does the answer address the user's actual question?
+- Context Recall: Were all relevant chunks retrieved? Requires a labeled ground-truth dataset.
+- Context Precision: Among retrieved chunks, what fraction were actually relevant?
+
+Tools: RAGAS (open-source), LangSmith (LangChain's observability platform), and TruLens-Eval.
+
+
+Best Practices for Production RAG
+----------------------------------
+1. Tune chunk size empirically — there is no universally optimal value. Larger chunks preserve more
+   context but dilute relevance signals. Smaller chunks are more precise but may lack context.
+2. Store rich metadata (source, page, section, date) alongside each chunk to enable filtering and
+   meaningful source citations.
+3. Monitor retrieval quality separately from generation quality — a bad retriever cannot be fixed
+   by a better LLM.
+4. Use streaming responses (LLM streaming) to improve perceived latency for users.
+5. Implement a fallback response ("I could not find relevant information in the knowledge base")
+   rather than allowing the model to hallucinate when retrieved context is insufficient.
+6. Version your vector store alongside your code — if you change chunk size or embedding model,
+   re-ingest all documents to maintain consistency.
