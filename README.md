@@ -12,6 +12,14 @@ This repo bundles two pipelines:
 
 ---
 
+## 🎥 Demo
+
+[![Watch the VidGrep demo on YouTube](https://img.youtube.com/vi/5PwcvqdmVJY/maxresdefault.jpg)](https://youtu.be/5PwcvqdmVJY)
+
+▶ [Watch on YouTube](https://youtu.be/5PwcvqdmVJY) — a walkthrough of the Streamlit UI ingesting a YouTube video and running multimodal queries with timestamped result cards.
+
+---
+
 ## Architecture
 
 ```
