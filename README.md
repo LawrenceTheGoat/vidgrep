@@ -4,9 +4,9 @@
 
 ## 🎥 Demo
 
-<video src="https://github.com/LawrenceTheGoat/vidgrep/raw/main/demo.mp4" controls width="100%"></video>
+![VidGrep demo](demo.gif)
 
-If the player above doesn't render in your viewer, [▶ click here to watch the demo](https://github.com/LawrenceTheGoat/vidgrep/blob/main/demo.mp4).
+*30-second preview. Click here for the [full HD demo with audio](https://github.com/LawrenceTheGoat/vidgrep/blob/main/demo.mp4) (1:41, 44 MB).*
 
 This repo bundles two pipelines:
 
