@@ -2,12 +2,6 @@
 
 > **grep, but for YouTube.** Search any video by what is *shown on screen* and what is *spoken* — return ranked, timestamped moments with an embedded auto-seeking player.
 
-## 🎥 Demo
-
-![VidGrep demo](demo.gif)
-
-*30-second preview. Click here for the [full HD demo with audio](https://github.com/LawrenceTheGoat/vidgrep/blob/main/demo.mp4) (1:41, 44 MB).*
-
 This repo bundles two pipelines:
 
 1. **VidGrep (Visual RAG)** — Search **YouTube videos by what is on screen *and* what is being said**, fully locally via Ollama + Moondream vision model. Each frame's caption is aligned with the surrounding transcript so semantic queries hit either modality.
